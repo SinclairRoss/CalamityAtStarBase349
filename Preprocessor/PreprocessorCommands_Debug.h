@@ -1,0 +1,6 @@
+#pragma once
+
+#define HIGHLIGHT_RIGIDBODY_STATIC true
+#define HIGHLIGHT_RIGIDBODY_DYNAMIC true
+
+#define HIGHLIGHT_INTERACTABLE true
