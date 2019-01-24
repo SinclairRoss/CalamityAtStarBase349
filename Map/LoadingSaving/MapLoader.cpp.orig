@@ -1,0 +1,83 @@
+#include "MapLoader.h"
+
+#include "Core\FileParsing\XMLParser.h"
+#include "GameConstants\GameConstants.h"
+#include "LevelEditor\Brushes\Brush.h"
+#include "Map\Utils\MapUtils.h"
+
+namespace MapLoader
+{
+    namespace
+    {
+        template <typename T_Element, typename T_ElementData>
+        void UpdateBrush(Brush<T_Element, T_ElementData>& brush, rapidxml::xml_node<>* elementNode)
+        {
+           std::string tileName = elementNode->first_node("Name")->value();
+           int id = GameConstants::TileData.GetElementIDWithName<T_ElementData>(tileName);
+
+            int rotationIndex = atoi(elementNode->first_node("RotationIndex")->value());
+            float worldX = static_cast<float>(atof(elementNode->first_node("WorldX")->value()));
+            float worldY = static_cast<float>(atof(elementNode->first_node("WorldY")->value()));
+            Vector2 worldPos(worldX, worldY);
+            
+            brush.SelectElement(id);
+            brush.SetPosition(worldPos);
+            brush.SetRotationIndex(rotationIndex);
+        }
+    }
+
+    Map LoadMap(const std::string& mapName)
+    {
+        XMLParser::XMLDoc_ptr mapData = XMLParser::ReadFile("SavedMaps/" + mapName + ".xml");
+
+        rapidxml::xml_node<>* mapRoot = mapData->first_node();
+
+        Map map(1);
+
+        if (mapRoot->first_node() != nullptr)
+        {
+            int levelCount = XMLParser::CalculateChildCount(*mapRoot);
+
+            Brush<MapElement_Floor, ElementData_Floor> brush_Floor;
+            Brush<MapElement_Wall, ElementData_Wall> brush_Wall;
+            Brush<Interactable, ElementData_Interactable> brush_Interactable;
+
+            int zDepth = 0;
+
+            for (rapidxml::xml_node<> *levelNode = mapRoot->first_node("Level"); levelNode != nullptr; levelNode = levelNode->next_sibling())
+            {
+                rapidxml::xml_node<> *elementRoot = levelNode->first_node("FloorTiles");
+                for (rapidxml::xml_node<> *element = elementRoot->first_node("Element"); element != nullptr; element = element->next_sibling())
+                {
+                    UpdateBrush<MapElement_Floor, ElementData_Floor>(brush_Floor, element);
+                    brush_Floor.CreateObject(map, zDepth, false);
+                }
+
+                elementRoot = levelNode->first_node("Walls");
+                for (rapidxml::xml_node<> *element = elementRoot->first_node("Element"); element != nullptr; element = element->next_sibling())
+                {
+                    UpdateBrush<MapElement_Wall, ElementData_Wall>(brush_Wall, element);
+                    brush_Wall.CreateObject(map, zDepth, false);
+                }
+
+                elementRoot = levelNode->first_node("Interactables");
+                for (rapidxml::xml_node<> *element = elementRoot->first_node("Element"); element != nullptr; element = element->next_sibling())
+                {
+                    UpdateBrush<Interactable, ElementData_Interactable>(brush_Interactable, element);
+                    brush_Interactable.CreateObject(map, zDepth, false);
+                }
+
+                ++zDepth;
+            }
+
+            MapUtils::CalculateFloorTileNeighbourhoods(map);
+            MapUtils::GenerateBounds(map);
+        }
+        else
+        {
+            printf("Map %s not found", mapName.c_str());
+        }
+
+        return map;
+    }
+}
